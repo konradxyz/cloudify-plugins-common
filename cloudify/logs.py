@@ -57,8 +57,8 @@ def message_context_from_cloudify_context(ctx):
 def message_context_from_workflow_context(ctx):
     """Build a message context from a CloudifyWorkflowContext instance"""
     return {
-        'blueprint_id': ctx.blueprint.id,
-        'deployment_id': ctx.deployment.id,
+        'blueprint_id': ctx.blueprint_id,
+        'deployment_id': ctx.deployment_id,
         'execution_id': ctx.execution_id,
         'workflow_id': ctx.workflow_id,
     }
