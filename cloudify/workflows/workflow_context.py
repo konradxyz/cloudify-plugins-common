@@ -789,7 +789,7 @@ class CloudifyWorkflowContext(
         self.deployment = WorkflowDeploymentContext(self._context, self)
 
         if self.local:
-            storage = self._context.pop('storage')
+            storage = self.internal.handler.storage
             raw_nodes = storage.get_nodes()
             raw_node_instances = storage.get_node_instances()
         else:
