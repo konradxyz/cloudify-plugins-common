@@ -850,4 +850,7 @@ def install_new_agents(ctx, **_):
             host.send_event('New agent installed.'),
             *_prepare_running_agent(host)
         )
+        for subnode in host.get_contained_subgraph():
+            seq.add(subnode.execute_operation(
+                'cloudify.interfaces.monitoring.start'))
     graph.execute()
