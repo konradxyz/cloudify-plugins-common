@@ -391,8 +391,10 @@ def _wait_for_host_to_start(host_node_instance):
 def _prepare_running_agent(host_node_instance):
     plugins_to_install = filter(lambda plugin: plugin['install'],
                                 host_node_instance.node.plugins_to_install)
+    tasks = []
     if plugins_to_install:
 
+        node_operations = host_node_instance.node.operations
         tasks += [host_node_instance.send_event('Installing plugins')]
         if 'cloudify.interfaces.plugin_installer.install' in \
                 node_operations:
@@ -439,6 +441,7 @@ def _prepare_running_agent(host_node_instance):
         host_node_instance.execute_operation(
             'cloudify.interfaces.monitoring_agent.start'),
     ]
+    return tasks
 
 
 def _host_post_start(host_node_instance):
