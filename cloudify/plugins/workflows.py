@@ -843,13 +843,14 @@ def install_new_agents(ctx, **_):
         # is executed. So all modification to cloudify_agent
         # dict performed by previous operations will be visible
         # here.
-        seq.add(
-            host.send_event('Installing new agent.'),
-            host.execute_operation(
-                'cloudify.interfaces.cloudify_agent.create_amqp'),
-            host.send_event('New agent installed.'),
-            *_prepare_running_agent(host)
-        )
+        if host.node.properties['install_agent'] is True:
+            seq.add(
+                host.send_event('Installing new agent.'),
+                host.execute_operation(
+                    'cloudify.interfaces.cloudify_agent.create_amqp'),
+                host.send_event('New agent installed.'),
+                *_prepare_running_agent(host)
+            )
         for subnode in host.get_contained_subgraph():
             seq.add(subnode.execute_operation(
                 'cloudify.interfaces.monitoring.start'))
