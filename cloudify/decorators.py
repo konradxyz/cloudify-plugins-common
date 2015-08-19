@@ -23,7 +23,8 @@ from StringIO import StringIO
 from functools import wraps
 
 from cloudify import context
-from cloudify.workflows.workflow_context import CloudifyWorkflowContext
+from cloudify.workflows.workflow_context import (CloudifyWorkflowContext,
+                                                 SystemWideWorkflowContext)
 from cloudify.manager import update_execution_status, get_rest_client
 from cloudify.workflows import api
 from cloudify_rest_client.executions import Execution
@@ -54,15 +55,6 @@ def _is_cloudify_context(obj):
     have returned True.
     """
     return context.CloudifyContext.__name__ in obj.__class__.__name__
-
-
-def _is_cloudify_workflow_context(obj):
-    """
-    Gets whether the provided obj is a CloudifyWorkflowContext instance.
-    From some reason Python's isinstance returned False when it should
-    have returned True.
-    """
-    return CloudifyWorkflowContext.__name__ in obj.__class__.__name__
 
 
 def _find_context_arg(args, kwargs, is_context):
@@ -188,11 +180,45 @@ def operation(func=None, **arguments):
         return partial_wrapper
 
 
+def _generic_wf_decorator(func=None, ctx_class=CloudifyWorkflowContext,
+                          **arguments):
+    """
+    Generic workflow decorator. It injects a ctx param (instance of ctx_class)
+    to the wrapped function's parameters.
+
+    Internally, if celery is installed, will also wrap the function
+    with a ``@celery.task`` decorator.
+    """
+    if func is not None:
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+
+            def is_ctx_class_instance(obj):
+                return isinstance(obj, ctx_class)
+
+            ctx = _find_context_arg(args, kwargs, is_ctx_class_instance)
+
+            if not is_ctx_class_instance(ctx):
+                ctx = ctx_class(ctx)
+
+            kwargs['ctx'] = ctx
+
+            if ctx.local:
+                workflow_wrapper = _local_workflow
+            else:
+                workflow_wrapper = _remote_workflow
+
+            return workflow_wrapper(ctx, func, args, kwargs)
+        return _process_wrapper(wrapper, arguments)
+    else:
+        def partial_wrapper(fn):
+            return _generic_wf_decorator(fn, ctx_class, **arguments)
+        return partial_wrapper
+
+
 def workflow(func=None, **arguments):
     """
     Decorate workflow functions with this decorator.
-    Internally, if celery is installed, will also wrap the function
-    with a ``@celery.task`` decorator
 
     The ``ctx`` injected to the function arguments is of type
     ``cloudify.workflows.workflow_context.CloudifyWorkflowContext``
@@ -208,27 +234,18 @@ def workflow(func=None, **arguments):
         def reinstall(**kwargs):
             pass
     """
-    if func is not None:
-        @wraps(func)
-        def wrapper(*args, **kwargs):
+    return _generic_wf_decorator(func, CloudifyWorkflowContext, **arguments)
 
-            ctx = _find_context_arg(args, kwargs,
-                                    _is_cloudify_workflow_context)
-            if not isinstance(ctx, CloudifyWorkflowContext):
-                ctx = CloudifyWorkflowContext(ctx)
-            kwargs['ctx'] = ctx
 
-            if ctx.local:
-                workflow_wrapper = _local_workflow
-            else:
-                workflow_wrapper = _remote_workflow
+def system_wide_workflow(func=None, **arguments):
+    """
+    Decorate system-wide workflows with this decorator.
 
-            return workflow_wrapper(ctx, func, args, kwargs)
-        return _process_wrapper(wrapper, arguments)
-    else:
-        def partial_wrapper(fn):
-            return workflow(fn, **arguments)
-        return partial_wrapper
+    The function will be executed by the manager's worker having
+    access to an instance of SystemWideWorkflowContext as its context
+    (ctx parameter).
+    """
+    return _generic_wf_decorator(func, SystemWideWorkflowContext, **arguments)
 
 
 class RequestSystemExit(SystemExit):
